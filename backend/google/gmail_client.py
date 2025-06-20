@@ -1,0 +1,295 @@
+import os.path
+import json
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+
+from backend.google.emails import Email
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+# If modifying these scopes, delete the file token.json.
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/gmail.modify"
+]
+
+class GmailClient:
+    def __init__(self, credentials_path: str = "credentials.json", token_path: str = "token.json"):
+        self.credentials_path = credentials_path
+        self.token_path = token_path
+        self.service = None
+        
+    def authenticate(self) -> bool:
+        """Authenticate the user to the Gmail API and return True if successful"""
+        creds = None
+        
+        # Check if token file exists and load credentials
+        if os.path.exists(self.token_path):
+            try:
+                creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
+            except Exception as e:
+                print(f"Error loading existing token: {e}")
+                # Remove invalid token file
+                os.remove(self.token_path)
+                creds = None
+        
+        # If no valid credentials available, authenticate
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                except Exception as e:
+                    print(f"Error refreshing token: {e}")
+                    creds = None
+            
+            if not creds:
+                if not os.path.exists(self.credentials_path):
+                    raise FileNotFoundError(
+                        f"Credentials file '{self.credentials_path}' not found. "
+                        "Please download it from Google Cloud Console."
+                    )
+                
+                try:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.credentials_path, SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
+                except Exception as e:
+                    print(f"Error during authentication: {e}")
+                    return False
+                
+                # Save the credentials for the next run
+                try:
+                    with open(self.token_path, "w") as token:
+                        token.write(creds.to_json())
+                except Exception as e:
+                    print(f"Error saving token: {e}")
+        
+        try:
+            # Build the Gmail service
+            self.service = build("gmail", "v1", credentials=creds)
+            
+            return True
+            
+        except HttpError as error:
+            print(f"Gmail API error: {error}")
+            return False
+        except Exception as error:
+            print(f"Unexpected error: {error}")
+            return False
+    
+    def get_labels(self) -> List[Dict[str, Any]]:
+        """Get all Gmail labels"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            results = self.service.users().labels().list(userId="me").execute()
+            return results.get("labels", [])
+        except HttpError as error:
+            print(f"Error getting labels: {error}")
+            return []
+    
+    def get_messages(self, query: str = "", max_results: int = 10) -> List[Dict[str, Any]]:
+        """Get messages based on query"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            results = self.service.users().messages().list(
+                userId="me", 
+                q=query, 
+                maxResults=max_results
+            ).execute()
+            
+            messages = results.get("messages", [])
+            return messages
+        except HttpError as error:
+            print(f"Error getting messages: {error}")
+            return []
+    
+    def get_unread_emails(self, count: int) -> List[Email]:
+        """Get unread emails"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            results = self.service.users().messages().list(
+                userId="me",
+                q="is:unread",
+                maxResults=count
+            ).execute()
+            msgs = results.get("messages", [])
+            emails = []
+            for msg in msgs:
+                # Get full message details using the message ID
+                full_msg = self.service.users().messages().get(
+                    userId="me",
+                    id=msg["id"],
+                    format="full"  # Gets complete message with headers and body
+                ).execute()
+                #extract info from full_msg
+                email = self.create_email_from_message(full_msg)
+                emails.append(email)
+            return emails
+        except HttpError as error:
+            print(f"Error getting unread emails: {error}")
+            return []
+        
+    def create_email_from_message(self, full_msg: Dict) -> Email:
+        """Create an Email object from Gmail API message response"""
+        email = Email()
+        
+        # Basic identifiers
+        email.id = full_msg.get("id", "")
+        email.thread_id = full_msg.get("threadId", "")
+        email.snippet = full_msg.get("snippet", "")
+        email.size_estimate = full_msg.get("sizeEstimate", 0)
+        email.internal_date = full_msg.get("internalDate", "")
+        email.raw_message = full_msg  # Store original response
+        
+        # Extract payload and headers
+        payload = full_msg.get("payload", {})
+        headers = payload.get("headers", [])
+        
+        # Convert headers to dictionary for easy access
+        header_dict = {header["name"]: header["value"] for header in headers}
+        email.headers = header_dict
+        
+        # Extract header information
+        email.subject = header_dict.get("Subject", "")
+        email.from_email = header_dict.get("From", "")
+        email.reply_to = header_dict.get("Reply-To", "")
+        email.date = header_dict.get("Date", "")
+        email.message_id = header_dict.get("Message-ID", "")
+        
+        # Parse from_email to extract name and address
+        email.from_name, email.from_address = self.parse_email_address(email.from_email)
+        
+        # Parse recipient lists
+        email.to = self.parse_email_list(header_dict.get("To", ""))
+        email.cc = self.parse_email_list(header_dict.get("Cc", ""))
+        email.bcc = self.parse_email_list(header_dict.get("Bcc", ""))
+        
+        # Parse dates
+        email.sent_date = self.parse_date(email.date)
+        email.received_date = self.parse_internal_date(email.internal_date)
+        
+        # Extract body content
+        email.body_text, email.body_html = self.extract_body_content(payload)
+        
+        return email
+
+    def parse_email_address(self, email_string: str) -> tuple[str, str]:
+        """Parse 'Name <email@domain.com>' format into name and address"""
+        import re
+        
+        if not email_string:
+            return "", ""
+        
+        # Pattern to match "Name <email@domain.com>" or just "email@domain.com"
+        match = re.match(r'^(.*?)\s*<(.+@.+)>$', email_string.strip())
+        if match:
+            name = match.group(1).strip(' "')
+            address = match.group(2).strip()
+            return name, address
+        else:
+            # Just an email address without name
+            return "", email_string.strip()
+
+    def parse_email_list(self, email_string: str) -> List[str]:
+        """Parse comma-separated email list"""
+        if not email_string:
+            return []
+        
+        # Split by comma and clean up each email
+        emails = [email.strip() for email in email_string.split(',')]
+        return [email for email in emails if email]  # Remove empty strings
+
+    def parse_date(self, date_string: str) -> datetime:
+        """Parse RFC 2822 date string to datetime object"""
+        from email.utils import parsedate_to_datetime
+        
+        if not date_string:
+            return None
+        
+        try:
+            return parsedate_to_datetime(date_string)
+        except (ValueError, TypeError):
+            return None
+
+    def parse_internal_date(self, internal_date: str) -> datetime:
+        """Parse Gmail internal date (milliseconds since epoch) to datetime"""
+        if not internal_date:
+            return None
+        
+        try:
+            # Convert milliseconds to seconds
+            timestamp = int(internal_date) / 1000
+            return datetime.fromtimestamp(timestamp)
+        except (ValueError, TypeError):
+            return None
+
+    def extract_body_content(self, payload: Dict) -> tuple[str, str]:
+        """Extract both text and HTML body content"""
+        text_body = ""
+        html_body = ""
+        
+        def process_part(part):
+            nonlocal text_body, html_body
+            mime_type = part.get("mimeType", "")
+            
+            if mime_type == "text/plain":
+                data = part.get("body", {}).get("data", "")
+                if data:
+                    text_body += self.decode_base64(data)
+                    
+            elif mime_type == "text/html":
+                data = part.get("body", {}).get("data", "")
+                if data:
+                    html_body += self.decode_base64(data)
+                    
+            elif mime_type.startswith("multipart/"):
+                # Process nested parts
+                for sub_part in part.get("parts", []):
+                    process_part(sub_part)
+        
+        # Handle multipart vs single part messages
+        if "parts" in payload:
+            for part in payload["parts"]:
+                process_part(part)
+        else:
+            process_part(payload)
+        
+        return text_body.strip(), html_body.strip()
+
+    def decode_base64(self, data: str) -> str:
+        """Decode base64url encoded data"""
+        import base64
+        
+        try:
+            # Add padding if needed
+            missing_padding = len(data) % 4
+            if missing_padding:
+                data += '=' * (4 - missing_padding)
+            
+            # Replace URL-safe characters and decode
+            data = data.replace('-', '+').replace('_', '/')
+            return base64.b64decode(data).decode('utf-8', errors='ignore')
+        except Exception:
+            return ""
+
+def authenticate_gmail() -> Optional[GmailClient]:
+    """Legacy function for backward compatibility"""
+    client = GmailClient()
+    if client.authenticate():
+        return client
+    return None
+
+
+
