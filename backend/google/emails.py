@@ -1,7 +1,9 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 
 class Email:
+    """Email model to represent Gmail messages"""
+    
     def __init__(self):
         # Basic identifiers
         self.id: str = ""                    # Gmail message ID
@@ -38,3 +40,6 @@ class Email:
         
         # Processing metadata
         self.raw_message: Dict = {}          # Store original API response if needed
+
+        # Drafts 
+        self.draft: str = ""

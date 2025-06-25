@@ -45,7 +45,7 @@ def test_gmail_authentication():
             print("📧 Testing unread email retrieval...")
             unread_emails = client.get_unread_emails(count=3)
             for email in unread_emails:
-                print(email.body_text)
+                print(email)
             print(f"✅ Found {len(unread_emails)} unread emails")
             
             return True

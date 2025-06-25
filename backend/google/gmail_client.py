@@ -2,6 +2,8 @@ import os.path
 import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+import base64
+from email.mime.text import MIMEText
 
 from backend.google.emails import Email
 from google.auth.transport.requests import Request
@@ -23,6 +25,7 @@ class GmailClient:
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.service = None
+        self.authenticate()
         
     def authenticate(self) -> bool:
         """Authenticate the user to the Gmail API and return True if successful"""
@@ -140,6 +143,30 @@ class GmailClient:
         except HttpError as error:
             print(f"Error getting unread emails: {error}")
             return []
+    
+    def fetch_email_by_msg_id(self, msg_id: str) -> List[Email]:
+        """Fetch a specific email by its message ID"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            # Get full message details using the message ID
+            full_msg = self.service.users().messages().get(
+                userId="me",
+                id=msg_id,
+                format="full"  # Gets complete message with headers and body
+            ).execute()
+            
+            # Create Email object from the message
+            email = self.create_email_from_message(full_msg)
+            return [email]
+            
+        except HttpError as error:
+            print(f"Error fetching email with ID {msg_id}: {error}")
+            return []
+        except Exception as error:
+            print(f"Unexpected error fetching email with ID {msg_id}: {error}")
+            return []
         
     def create_email_from_message(self, full_msg: Dict) -> Email:
         """Create an Email object from Gmail API message response"""
@@ -184,6 +211,39 @@ class GmailClient:
         email.body_text, email.body_html = self.extract_body_content(payload)
         
         return email
+    
+    def create_draft_from_email(self, email: Email) -> bool:
+        """Create a draft from an Email object"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            # 1. Build the MIME message
+            message = MIMEText(email.draft, "plain")
+            # Convert list of recipients to comma-separated string
+            message["to"] = ", ".join(email.to) if email.to else ""
+            message["subject"] = email.subject
+
+            # 2. Base64-encode the message
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+            # 3. Wrap it in the request body
+            create_body = {"message": {"raw": raw_message}}
+
+            draft = (
+                self.service.users()
+                    .drafts()
+                    .create(userId='me', body=create_body)
+                    .execute()
+            )
+
+            return True
+        except HttpError as error:
+            print(f"Error creating draft: {error}")
+            return False
+        except Exception as error:
+            print(f"Unexpected error creating draft: {error}")
+            return False
 
     def parse_email_address(self, email_string: str) -> tuple[str, str]:
         """Parse 'Name <email@domain.com>' format into name and address"""
