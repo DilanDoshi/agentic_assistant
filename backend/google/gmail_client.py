@@ -1,3 +1,11 @@
+"""
+Gmail API client for the Agentic Assistant.
+
+This module provides a comprehensive interface to the Gmail API, handling
+authentication, email retrieval, parsing, and draft creation. It encapsulates
+all Gmail-related operations needed by the AI assistant.
+"""
+
 import os.path
 import json
 from typing import Optional, List, Dict, Any
@@ -12,23 +20,49 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# If modifying these scopes, delete the file token.json.
+# Gmail API scopes required for the application
+# If modifying these scopes, delete the file token.json to force re-authentication
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/gmail.compose",
-    "https://www.googleapis.com/auth/gmail.modify"
+    "https://www.googleapis.com/auth/gmail.readonly",    # Read emails and metadata
+    "https://www.googleapis.com/auth/gmail.send",        # Send emails
+    "https://www.googleapis.com/auth/gmail.compose",     # Create and modify drafts
+    "https://www.googleapis.com/auth/gmail.modify"       # Modify emails (labels, etc.)
 ]
 
 class GmailClient:
+    """
+    Gmail API client for handling email operations.
+    
+    This class provides methods for authenticating with Gmail, retrieving emails,
+    parsing email content, and creating drafts. It handles all the complexity
+    of working with the Gmail API and provides a clean interface for the rest
+    of the application.
+    """
+    
     def __init__(self, credentials_path: str = "credentials.json", token_path: str = "token.json"):
+        """
+        Initialize the Gmail client with authentication.
+        
+        Args:
+            credentials_path (str): Path to the Google Cloud credentials file
+            token_path (str): Path to store/load the OAuth token
+        """
         self.credentials_path = credentials_path
         self.token_path = token_path
-        self.service = None
-        self.authenticate()
+        self.service = None  # Gmail API service instance
+        self.authenticate()  # Automatically authenticate on initialization
         
     def authenticate(self) -> bool:
-        """Authenticate the user to the Gmail API and return True if successful"""
+        """
+        Authenticate the user to the Gmail API and return True if successful.
+        
+        This method handles the OAuth2 flow for Gmail API access. It first tries
+        to load existing credentials from the token file, and if that fails or
+        the token is expired, it initiates a new authentication flow.
+        
+        Returns:
+            bool: True if authentication was successful, False otherwise
+        """
         creds = None
         
         # Check if token file exists and load credentials

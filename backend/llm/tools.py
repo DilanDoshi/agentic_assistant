@@ -11,7 +11,7 @@ import ast
 GMAIL_CLIENT = GmailClient()
 
 def get_unread_emails(count: int) -> dict:
-    """Gets unread emails from Gmail inbox.
+    """Gets unread emails from the user's Gmail inbox.
     
     Args:
         count (int): Number of unread emails to retrieve. If unspecified, default to 10.
@@ -59,6 +59,7 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
     """ 
     This tool will create drafts to respond to the unread emails. Use this tool when you need to create drafts to the user's unread emails.
     This tool will also decide which emails require a response and which emails do not.
+    Only use this tool if the user has unread emails.
 
     Args:
         email_ids(list(str)): A list of google message email ids. Use the get_unread_emails tool to get the google message email ids.

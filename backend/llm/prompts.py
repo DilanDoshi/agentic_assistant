@@ -1,3 +1,12 @@
+"""
+Prompt templates for the Agentic Assistant.
+
+This module contains all the prompt templates used by the AI agent
+for different tasks including email analysis, draft creation, and
+general conversation guidance.
+"""
+
+# Main system prompt for the React agent that defines its behavior and capabilities
 test_react_agent_main_prompt = """
     You are a helpful assistant that can help the user with their email. Use the tool:
         - get_unread_emails(count: int) -> dict to get unread emails from the user's inbox
@@ -11,6 +20,19 @@ test_react_agent_main_prompt = """
     """
 
 def get_drating_agent_prompt(email_info: str) -> str:
+    """
+    Generate a prompt for creating professional email drafts.
+    
+    This prompt instructs the LLM to create high-quality, professional email drafts
+    that sound like they were written by a thoughtful human colleague. The prompt
+    includes detailed guidelines for tone, structure, and content.
+    
+    Args:
+        email_info (str): String representation of the email data to respond to
+        
+    Returns:
+        str: Complete prompt for email draft generation
+    """
     return f"""
     You are an AI assistant whose sole responsibility is to compose friendly, professional, and grammatically flawless email drafts that read as though written by a thoughtful human colleague. 
     You will be given an email as a python dictionary to respond to. Create a draft in response to that email. These are emails that are being sent to the user. Respond as if you are the user.
@@ -55,6 +77,20 @@ def get_drating_agent_prompt(email_info: str) -> str:
     """
 
 def get_msg_ids_prompt(email_info: str) -> str:
+    """
+    Generate a prompt for analyzing emails and determining which ones need responses.
+    
+    This prompt instructs the LLM to analyze a list of emails and return only the
+    message IDs of emails that require a response, filtering out spam, automated
+    messages, and non-actionable content.
+    
+    Args:
+        email_info (str): String representation of the email dictionary to analyze
+        
+    Returns:
+        str: Complete prompt for email analysis
+    """
+    # Base prompt that defines the task and criteria
     prompt = """
         You are an AI assistant whose only goal is to analyze the provided list of emails and return a Python list of the Gmail message IDs for emails that require a response.
         Make sure you ONLY RETURN THE PYTHON LIST OF MESSAGE IDs and nothing else.
@@ -95,9 +131,13 @@ def get_msg_ids_prompt(email_info: str) -> str:
             # additional entries…
         }}
         """
+    
+    # Add the actual email data to the prompt
     part_two = f"""
         <begin_emails_dict>
         {email_info}
         </end_emails_dict>
         """
+    
+    # Combine the base prompt with the email data
     return prompt + part_two
