@@ -4,7 +4,7 @@
 
 An intelligent AI assistant that helps with everyday work and academic tasks. Users interact with it like GPT, but the agent is specifically equipped to handle email management, calendar operations, and other productivity tasks.
 
-Note: This project is still in progress.
+Note: This project is still in progress. This is project is being done wiht little to no AI for code generation. This is a project to help me learn fullstack development as well as langgraph, langchain, and other APIs.
 
 **Capabilities:**
 
