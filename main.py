@@ -73,6 +73,7 @@ def run_chat():
     an infinite loop that accepts user input and displays AI responses.
     Users can exit by typing 'exit', 'quit', or 'bye'.
     """
+    print("\n\nWelcome to the Agentic Assistant! I am an AI assistant that can help you see and understand unread emails and create drafts that are ready to send. \nI can also act as a regular LLM and answer any questions you may have. Type 'exit', 'quit', or 'bye' to end the conversation.")
     # Create a unique thread ID for this chat session
     thread_id = create_chat_id()
     
@@ -96,6 +97,8 @@ def main():
     
     Currently runs the interactive chat interface. There's also a commented
     line that can be used to test the email draft creation functionality.
+
+    This is for testing until the full stack app is built.
     """
     # Start the interactive chat interface
     run_chat()

@@ -16,6 +16,7 @@ test_react_agent_main_prompt = """
                 - Each draft must show the subject, to, cc, bcc, date, and draft content
     Answer other questions with the information you have.
     Maintain a professional and friendly tone.
+    Report any errors you encounter to the user.
 
     """
 

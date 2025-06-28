@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import base64
 from email.mime.text import MIMEText
+import re
 
 from backend.google.emails import Email
 from google.auth.transport.requests import Request
@@ -246,23 +247,60 @@ class GmailClient:
         
         return email
     
-    def create_draft_from_email(self, email: Email) -> bool:
-        """Create a draft from an Email object"""
+    def create_draft_from_email(self, email: Email) -> str:
+        """Create a draft from an Email object
+        Args:
+            email(Email): An Email object that contains the draft to be created
+        Returns:
+            str: The message id of the created draft
+        """
         if not self.service:
             raise RuntimeError("Not authenticated. Call authenticate() first.")
         
         try:
             # 1. Build the MIME message
             message = MIMEText(email.draft, "plain")
-            # Convert list of recipients to comma-separated string
-            message["to"] = ", ".join(email.to) if email.to else ""
+
+            # Get all relevant people the email needs to be sent to (reply all)
+            profile = self.service.users().getProfile(userId="me").execute()   
+            user_email = profile['emailAddress']
+            
+
+            # Build recipient lists for reply-all
+            orig_to = email.to or []
+            orig_cc = email.cc or []
+            
+            # Clean up email lists to only contain plain email addresses
+            orig_to = [self.extract_email_only(x) for x in orig_to]
+            orig_cc = [self.extract_email_only(x) for x in orig_cc]
+            
+            orig_to.append(email.from_address)
+            
+            
+            orig_to = [x for x in orig_to if x != user_email]
+            cc_send = [x for x in orig_cc if x != user_email]
+            
+
+
+            # Set recipients
+            if orig_to:
+                message["to"] = ', '.join(orig_to)
+            else:
+                return "ERROR CREATING DRAFT: No recipients found"
+            if cc_send:
+                message["Cc"] = ", ".join(cc_send)
+        
             message["subject"] = email.subject
+
+            # In-reply-to header
+            message["In-Reply-To"] = email.message_id
+            message["References"] = email.message_id
 
             # 2. Base64-encode the message
             raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
             # 3. Wrap it in the request body
-            create_body = {"message": {"raw": raw_message}}
+            create_body = {"message": {"raw": raw_message}, "threadId": email.thread_id}
 
             draft = (
                 self.service.users()
@@ -271,13 +309,23 @@ class GmailClient:
                     .execute()
             )
 
-            return True
+            return draft['id']
         except HttpError as error:
             print(f"Error creating draft: {error}")
             return False
         except Exception as error:
             print(f"Unexpected error creating draft: {error}")
             return False
+
+    def extract_email_only(self, email_str):
+        """Extract just the email address from formatted strings like 'Name <email@domain.com>'"""
+
+        # Pattern to match email in angle brackets
+        match = re.search(r'<(.+@.+)>', email_str)
+        if match:
+            return match.group(1)
+        # If no angle brackets, return as is
+        return email_str
 
     def parse_email_address(self, email_string: str) -> tuple[str, str]:
         """Parse 'Name <email@domain.com>' format into name and address"""

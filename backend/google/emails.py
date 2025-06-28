@@ -60,5 +60,7 @@ class Email:
         # Processing metadata
         self.raw_message: Dict = {}          # Store original Gmail API response if needed
 
-        # Generated content
+        # Drafts
         self.draft: str = ""                 # AI-generated draft response to this email
+        self.draft_id: str = ""              # Google message id for the draft
+

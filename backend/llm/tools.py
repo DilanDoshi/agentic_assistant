@@ -128,13 +128,32 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
         email_objs[email_id].draft = draft_response.content
 
         # Send to drafts via API
-        g_client.create_draft_from_email(email_objs[email_id])
+        draft_id = g_client.create_draft_from_email(email_objs[email_id])
+        email_objs[email_id].draft_id = draft_id
+        emails_dict[email_id]['draft_id'] = draft_id
 
         draft_messages.append({"role": "assistant", "content": draft_response.content})
 
-    
     # TODO: Figure out how to send the drafts to front end to display
     return emails_dict
 
+def send_drafts(draft_ids: list[str], confirmation: bool) -> bool:
+    """ Use this tool only after you have called create_drafts_for_unread_emails tool.
+    This tool will send the created drafts to the intended recipients.
+    To use this tool, you need to ask confirm with user if they want to send the drafts as well as which drafts to send.
 
+    Args:
+        draft_ids(list[str]): A list of google message email ids for the drafts that the user CONFIRMED to send. 
+        confirmation(bool): A boolean value that indicates if the user confirmed to send the drafts listed in the draft_ids parameter.
+    
+    Return:
+        A boolean value that indicates if the drafts were sent successfully.
+    """
+
+
+    pass
+
+def get_user_profile() -> dict:
+    """ Use this tool to get the user's profile from their gmail.
+    """
 TOOLS = [get_unread_emails, create_drafts_for_unread_emails]
