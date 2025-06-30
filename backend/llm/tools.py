@@ -133,27 +133,47 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
         emails_dict[email_id]['draft_id'] = draft_id
 
         draft_messages.append({"role": "assistant", "content": draft_response.content})
+        
+        # Give AI ready_to_send field (False by default)
+        emails_dict[email_id]['ready_to_send'] = email_objs[email_id].ready_to_send
 
     # TODO: Figure out how to send the drafts to front end to display
     return emails_dict
 
-def send_drafts(draft_ids: list[str], confirmation: bool) -> bool:
-    """ Use this tool only after you have called create_drafts_for_unread_emails tool.
+def send_drafts(draft_ids: list[str], confirmation: bool) -> dict:
+    """ 
+    Use this tool only after you have called create_drafts_for_unread_emails tool.
     This tool will send the created drafts to the intended recipients.
     To use this tool, you need to ask confirm with user if they want to send the drafts as well as which drafts to send.
+    Make sure to change the status of the draft under the field 'status' to 'sent' if the user confirmed to send the draft AFTER calling this tool and receive True.
 
     Args:
-        draft_ids(list[str]): A list of google message email ids for the drafts that the user CONFIRMED to send. 
+        draft_ids(list[str]): A list of google message email ids for the drafts that the user CONFIRMED to send. Use the draft_id field from the dict returned by the create_drafts_for_unread_emails tool.
         confirmation(bool): A boolean value that indicates if the user confirmed to send the drafts listed in the draft_ids parameter.
     
     Return:
-        A boolean value that indicates if the drafts were sent successfully.
+        A dictionary of draft ids and their status. True if sent successfully, False if not. Report to the user which drafts were sent successfully and which were not.
     """
 
+    g_client = GmailClient()
+    status = {}
+    for draft_id in draft_ids:
+        status[draft_id] = g_client.send_draft(draft_id)
 
+    return status
+
+def edit_existing_draft() -> dict:
     pass
+
+def get_calendar_events() -> dict:
+    pass
+
+def set_meeting() -> dict:
+    pass
+
+
 
 def get_user_profile() -> dict:
     """ Use this tool to get the user's profile from their gmail.
     """
-TOOLS = [get_unread_emails, create_drafts_for_unread_emails]
+TOOLS = [get_unread_emails, create_drafts_for_unread_emails, send_drafts]

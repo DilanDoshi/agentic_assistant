@@ -280,27 +280,35 @@ class GmailClient:
             orig_to = [x for x in orig_to if x != user_email]
             cc_send = [x for x in orig_cc if x != user_email]
             
-
-
             # Set recipients
             if orig_to:
-                message["to"] = ', '.join(orig_to)
+                message["To"] = ', '.join(orig_to)
             else:
                 return "ERROR CREATING DRAFT: No recipients found"
             if cc_send:
                 message["Cc"] = ", ".join(cc_send)
         
-            message["subject"] = email.subject
+            # Format subject for reply (add "Re:" if not already present)
+            subject = email.subject
+            if not subject.lower().startswith("re:"):
+                subject = f"Re: {subject}"
+            message["Subject"] = subject
 
-            # In-reply-to header
-            message["In-Reply-To"] = email.message_id
-            message["References"] = email.message_id
+            # Set reply headers for proper threading
+            if email.message_id:
+                message["In-Reply-To"] = email.message_id
+                message["References"] = email.message_id
 
             # 2. Base64-encode the message
             raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
 
-            # 3. Wrap it in the request body
-            create_body = {"message": {"raw": raw_message}, "threadId": email.thread_id}
+            # 3. Wrap it in the request body with thread ID for conversation threading
+            create_body = {
+                "message": {
+                    "raw": raw_message,
+                    "threadId": email.thread_id
+                }
+            }
 
             draft = (
                 self.service.users()
@@ -309,12 +317,35 @@ class GmailClient:
                     .execute()
             )
 
+
+            # TODO: make so that draft is replied 'in conversation'
+
             return draft['id']
         except HttpError as error:
             print(f"Error creating draft: {error}")
             return False
         except Exception as error:
             print(f"Unexpected error creating draft: {error}")
+            return False
+    def send_draft(self, draft_id: str) -> bool:
+        """Send a draft by its message ID"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            body = {'id': draft_id}
+            sent_message = (
+                self.service.users()
+                    .drafts()
+                    .send(userId='me', body=body)
+                    .execute()
+            )
+            return True
+        except HttpError as e:
+            print(f"Error sending draft: {e}")
+            return False
+        except Exception as e:
+            print(f"Unexpected error sending draft: {e}")
             return False
 
     def extract_email_only(self, email_str):

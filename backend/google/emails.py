@@ -63,4 +63,5 @@ class Email:
         # Drafts
         self.draft: str = ""                 # AI-generated draft response to this email
         self.draft_id: str = ""              # Google message id for the draft
-
+        self.ready_to_send: bool = False      # Whether the draft is ready to send, True if user has revied draft
+        self.status: str = ""                 # Status of the draft, either '' or 'sent' if sent
