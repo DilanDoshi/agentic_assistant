@@ -252,7 +252,7 @@ class GmailClient:
         Args:
             email(Email): An Email object that contains the draft to be created
         Returns:
-            str: The message id of the created draft
+            str: The message id of the created draft (draft_id)
         """
         if not self.service:
             raise RuntimeError("Not authenticated. Call authenticate() first.")
@@ -269,17 +269,20 @@ class GmailClient:
             # Build recipient lists for reply-all
             orig_to = email.to or []
             orig_cc = email.cc or []
+            orig_bcc = email.bcc or []
             
             # Clean up email lists to only contain plain email addresses
             orig_to = [self.extract_email_only(x) for x in orig_to]
             orig_cc = [self.extract_email_only(x) for x in orig_cc]
-            
+            orig_bcc = [self.extract_email_only(x) for x in orig_bcc]
+
             orig_to.append(email.from_address)
             
             
             orig_to = [x for x in orig_to if x != user_email]
             cc_send = [x for x in orig_cc if x != user_email]
-            
+            bcc_send = [x for x in orig_bcc if x != user_email]
+
             # Set recipients
             if orig_to:
                 message["To"] = ', '.join(orig_to)
@@ -287,6 +290,8 @@ class GmailClient:
                 return "ERROR CREATING DRAFT: No recipients found"
             if cc_send:
                 message["Cc"] = ", ".join(cc_send)
+            if bcc_send:
+                message["Bcc"] = ", ".join(bcc_send)
         
             # Format subject for reply (add "Re:" if not already present)
             subject = email.subject
@@ -317,9 +322,6 @@ class GmailClient:
                     .execute()
             )
 
-
-            # TODO: make so that draft is replied 'in conversation'
-
             return draft['id']
         except HttpError as error:
             print(f"Error creating draft: {error}")
@@ -327,6 +329,83 @@ class GmailClient:
         except Exception as error:
             print(f"Unexpected error creating draft: {error}")
             return False
+
+    def edit_existing_draft(self, draft_id: str, new_body: str, new_subject: str, new_to: list[str], new_cc: list[str], new_bcc: list[str]) -> str:
+        """Edit an existing draft by its draft ID"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+
+        try:
+            # Get the draft information from draft id from API
+            try:
+                draft = self.service.users().drafts().get(userId='me', id=draft_id, format='full').execute()
+            except HttpError as e:
+                return "Error editing draft: Draft not found or access denied"
+            except Exception as e:
+                return "Error editing draft: Network or API error"
+            
+            draft_obj = self.create_email_from_message(draft['message'])
+
+            draft_message = ""
+            
+            if new_body:
+                draft_message = MIMEText(new_body, "plain")
+            else:
+                draft_message = MIMEText(draft_obj.body_text, "plain")
+
+            if new_subject:
+                draft_message["Subject"] = new_subject
+            else:
+                draft_message["Subject"] = draft_obj.subject
+
+            if new_to:
+                draft_message["To"] = ", ".join(new_to)
+            else:
+                draft_message["To"] = ", ".join(draft_obj.to)
+
+            if new_cc:
+                draft_message["Cc"] = ", ".join(new_cc)
+            else:
+                draft_message["Cc"] = ", ".join(draft_obj.cc)
+
+            if new_bcc:
+                draft_message["Bcc"] = ", ".join(new_bcc)
+            else:
+                draft_message["Bcc"] = ", ".join(draft_obj.bcc)
+
+            # Set reply headers for proper threading
+            if draft_obj.message_id:
+                draft_message["In-Reply-To"] = draft_obj.message_id
+                draft_message["References"] = draft_obj.message_id
+
+            # 2. Base64-encode the message
+            raw_message = base64.urlsafe_b64encode(draft_message.as_bytes()).decode()
+
+            # 3. Wrap it in the request body with thread ID for conversation threading
+            create_body = {
+                'id': draft_id,
+                "message": {
+                    "raw": raw_message,
+                    "threadId": draft_obj.thread_id
+                }
+            }
+
+            # 4. Call the API
+            try:
+                new_draft = self.service.users().drafts().update(userId="me", id=draft_id, body=create_body).execute()
+            except HttpError as e:
+                return "Error editing draft: Update failed"
+            except Exception as e:
+                return "Error editing draft: Network or API error during update"
+
+            return new_draft['id']
+        except HttpError as error:
+            print(f"Error editing draft: {error}")
+            return "Error editing draft"
+        except Exception as error:
+            print(f"Unexpected error editing draft: {error}")
+            return "Unexpected error editing draft"
+
     def send_draft(self, draft_id: str) -> bool:
         """Send a draft by its message ID"""
         if not self.service:
@@ -458,6 +537,7 @@ class GmailClient:
             return ""
 
 def authenticate_gmail() -> Optional[GmailClient]:
+    
     """Legacy function for backward compatibility"""
     client = GmailClient()
     if client.authenticate():

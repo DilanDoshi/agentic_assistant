@@ -73,9 +73,11 @@ def run_chat():
     an infinite loop that accepts user input and displays AI responses.
     Users can exit by typing 'exit', 'quit', or 'bye'.
     """
-    print("\n\nClaude: Welcome to the Agentic Assistant! I am an AI assistant that can help you see and understand unread emails and create drafts that are ready to send. \nI can also act as a regular LLM and answer any questions you may have. Type 'exit', 'quit', or 'bye' to end the conversation.")
     # Create a unique thread ID for this chat session
     thread_id = create_chat_id()
+    print(f"Session ID: {thread_id}\n\n")
+    print("\n\nClaude: Welcome to the Agentic Assistant! I am an AI assistant that can help you see and understand unread emails and create drafts that are ready to send. \nI can also act as a regular LLM and answer any questions you may have. Type 'exit', 'quit', or 'bye' to end the conversation.")
+
     
     # Main chat loop
     while True:

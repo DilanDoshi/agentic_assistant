@@ -26,6 +26,7 @@ def chat_with_agent(agent, user_input: str, thread_id: str):
     # Ensure we have a valid thread ID for conversation tracking
     if not thread_id:
         thread_id = create_chat_id()
+        print ("USING CHAT ID: ", thread_id)
 
     # Configure the agent with the thread ID for conversation continuity
     config = {
