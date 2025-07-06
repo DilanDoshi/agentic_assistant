@@ -137,6 +137,9 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
         # Give AI ready_to_send field (False by default)
         emails_dict[email_id]['ready_to_send'] = email_objs[email_id].ready_to_send
 
+        # Mark the email as read
+        g_client.mark_as_read(email_id)
+
     # TODO: Figure out how to send the drafts to front end to display
     return emails_dict
 
@@ -162,19 +165,19 @@ def send_drafts(draft_ids: list[str], confirmation: bool) -> dict:
 
     return status
 
-def edit_existing_draft(draft_ids: str, new_body: str, new_subject: str, new_to: str, new_cc: str, new_bcc: str, new_reply_to: str, thread_id: str) -> dict:
+def edit_existing_draft(draft_ids: str, new_body: str, new_subject: str, new_to: list[str], new_cc: list[str], new_bcc: list[str], new_reply_to: str, thread_id: str) -> dict:
     """
     Use this tool to edit an existing draft. Use this tool only when the user requests to edit a particular draft. Must have used the create_drafts_for_unread_emails tool to prior to using this tool.
     Make sure to update the dict element of the draft_id (from the create_drafts_for_unread_emails tool) changed with the new values after receiving the output from this tool.
-    Args are for the new values of the draft. If the user does not specify a new value, pass an empty string.
+    Args are for the new values of the draft. If the user does not specify a new value, pass an empty string or list.
 
     Args:
         draft_ids(str): The draft id of the draft to edit.
         new_body(str): The new body of the draft.
         new_subject(str): The new subject of the draft.
-        new_to(str): The new to's of the draft (comma-separated).
-        new_cc(str): The new cc of the draft (comma-separated).
-        new_bcc(str): The new bcc of the draft (comma-separated).
+        new_to(list[str]): The new to's of the draft.
+        new_cc(list[str]): The new cc of the draft.
+        new_bcc(list[str]): The new bcc of the draft.
         new_reply_to(str): The new reply to of the draft.
         thread_id(str): The thread id of the draft.
 
@@ -185,21 +188,11 @@ def edit_existing_draft(draft_ids: str, new_body: str, new_subject: str, new_to:
 
     g_client = GmailClient()
     
-    # Parse comma-separated strings into lists
-    new_to_list = [email.strip() for email in new_to.split(',')] if new_to else []
-    new_cc_list = [email.strip() for email in new_cc.split(',')] if new_cc else []
-    new_bcc_list = [email.strip() for email in new_bcc.split(',')] if new_bcc else []
-    
-    # Remove empty strings
-    new_to_list = [email for email in new_to_list if email]
-    new_cc_list = [email for email in new_cc_list if email]
-    new_bcc_list = [email for email in new_bcc_list if email]
-    
     # Call the Gmail client method
-    result = g_client.edit_existing_draft(draft_ids, new_body, new_subject, new_to_list, new_cc_list, new_bcc_list)
+    result = g_client.edit_existing_draft(draft_ids, new_body, new_subject, new_to, new_cc, new_bcc)
     
     # Check if the operation was successful
-    if result == "Error editing draft" or result == "Unexpected error editing draft":
+    if result.startswith("Error editing draft"):
         return {
             'error': result,
             'draft_id': draft_ids
@@ -210,7 +203,8 @@ def edit_existing_draft(draft_ids: str, new_body: str, new_subject: str, new_to:
     return_dict = {
         'draft': updated_draft,
         'draft_id': result
-    } 
+    }
+
     return return_dict
     
 

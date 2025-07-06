@@ -103,8 +103,10 @@ def main():
     This is for testing until the full stack app is built.
     """
     # Start the interactive chat interface
-    run_chat()
     
+    run_chat()
+
+ 
     # Alternative: Test email draft creation (currently commented out)
     #print(create_drafts_for_unread_emails(['197a47fc64229a54']))
     print('\n\n')

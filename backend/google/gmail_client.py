@@ -202,6 +202,27 @@ class GmailClient:
         except Exception as error:
             print(f"Unexpected error fetching email with ID {msg_id}: {error}")
             return []
+    def mark_as_read(self, msg_id: str) -> bool:
+        """Mark an email as read"""
+        if not self.service:
+            raise RuntimeError("Not authenticated. Call authenticate() first.")
+        
+        try:
+            self.service.users().messages().modify(
+                userId="me", 
+                id=msg_id, 
+                body={"removeLabelIds": ["UNREAD"]}
+                ).execute()
+            
+            print(f"Email {msg_id} marked as read")
+            
+            return True
+        except HttpError as error:
+            print(f"Error marking email as read: {error}")
+            return False
+        except Exception as error:
+            print(f"Unexpected error marking email as read: {error}")
+            return False
         
     def create_email_from_message(self, full_msg: Dict) -> Email:
         """Create an Email object from Gmail API message response"""

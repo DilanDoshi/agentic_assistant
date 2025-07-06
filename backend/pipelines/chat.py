@@ -59,5 +59,3 @@ def create_chat_id() -> str:
         str: A unique UUID4 string identifier
     """
     return str(uuid.uuid4())
-
-
