@@ -131,10 +131,14 @@ def get_msg_ids_prompt(email_info: str) -> str:
                 'date': 'Fri, 20 Jun 2025 21:20:37 GMT',
                 'received_date': datetime.datetime(2025, 6, 20, 14, 20, 37),
                 'body_text': 'You allowed agent-app access to some of your Google Account data…',
-                'headers': {{ 'Delivered-To': 'test.doshi.email@gmail.com' }}
+                'headers': {{ 'Delivered-To': 'test.doshi.email@gmail.com' }},
+                'draft': '',
+                'draft_specications': ''
             }},
             # additional entries…
         }}
+
+        Please include the draft_specications in the draft that you are creating. This field may include specifications about meeting time, user information, etc.
         """
     
     # Add the actual email data to the prompt

@@ -9,6 +9,8 @@ from backend.llm.agent import agent
 from backend.pipelines.chat import chat_with_agent, create_chat_id
 from backend.llm.tools import create_drafts_for_unread_emails
 from backend.google.gmail_client import GmailClient
+from backend.google.gcal_client import GoogleCalendarClient
+
 
 def test1():
     """

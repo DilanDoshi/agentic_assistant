@@ -1,5 +1,7 @@
 from backend.google.gmail_client import GmailClient
 from backend.google.emails import Email
+from backend.google.gcal_client import GoogleCalendarClient
+from backend.google.events import Event
 from backend.pipelines.chat import chat_with_agent, create_chat_id
 from backend.llm import init_llm
 from backend.llm import prompts
@@ -7,8 +9,6 @@ from backend.google.gmail_client import GmailClient
 
 import ast
 
-
-GMAIL_CLIENT = GmailClient()
 
 def get_unread_emails(count: int) -> dict:
     """Gets unread emails from the user's Gmail inbox.
@@ -22,10 +22,9 @@ def get_unread_emails(count: int) -> dict:
             data (dict): Email data keyed by ID if successful
             error (str): Error message if unsuccessful
     """
-    if GMAIL_CLIENT.authenticate() is False:
-        return "Failed to authenticate with Gmail"
+    g_client = GmailClient()
     
-    emails = GMAIL_CLIENT.get_unread_emails(count)
+    emails = g_client.get_unread_emails(count)
     
     # Convert emails list to dictionary keyed by email ID
     email_dict = {}
@@ -66,12 +65,11 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
     Returns:
         A dictionary of email ids and their drafts.
     """
+    g_client = GmailClient()
     emails_dict = {}
     drafts = []
     email_objs = {}
 
-
-    g_client = GmailClient()
     for email_id in email_ids:
         email_obj = g_client.fetch_email_by_msg_id(email_id)[0]
         email_objs[email_id] = email_obj
@@ -87,7 +85,8 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
             'date': email_obj.date,
             'received_date': email_obj.received_date,
             'body_text': email_obj.body_text,
-            'draft': ''
+            'draft': '',
+            'draft_specications': ''
         }
     
     emails_for_llm = str(emails_dict)
@@ -117,6 +116,7 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
     for email_id in email_ids_from_llm:
         # Ask LLM to create a draft for the email
         email_info = str(emails_dict[email_id])
+
         draft_prompt_content = prompts.get_drating_agent_prompt(email_info)
         draft_messages.append({"role": "user", "content": draft_prompt_content})
 
@@ -208,15 +208,104 @@ def edit_existing_draft(draft_ids: str, new_body: str, new_subject: str, new_to:
     return return_dict
     
 
-def get_calendar_events() -> dict:
-    pass
+def get_calendar_events(days: int = 7) -> dict:
+    """
+    Get upcoming calendar events for the user. Use this tool when the user requests to see their calendar events. or if a response requires a calendar event k number of days in the future. 
+    This tool is meant to help you understand the user's calendar events and schedule a calendar event if needed.
+    
+    Args:
+        days(int): Number of days to get events for. Default is 7 days. Adjust the parameter based on the user's requests or if an email response requires a calendar event n number of days in the future.
+        
+    Returns:
+        dict: Dictionary containing:
+            success (bool): Whether the operation succeeded
+            events (list): List of upcoming calendar events
+    """
+    calendar_client = GoogleCalendarClient()
+    
+    # Get upcoming events as Event objects
+    events = calendar_client.get_upcoming_events_as_objects(days=days, max_results=999)
+    
+    # Format events for easier consumption
+    formatted_events = []
+    for event in events:
+        formatted_event = {
+            'id': event.id,
+            'summary': event.summary or 'No title',
+            'description': event.description,
+            'start_time': event.start_time.isoformat() if event.start_time else '',
+            'end_time': event.end_time.isoformat() if event.end_time else '',
+            'start_date': event.start_date,
+            'end_date': event.end_date,
+            'is_all_day': event.is_all_day,
+            'location': event.location,
+            'attendees': [attendee.get('email') for attendee in event.attendees],
+            'organizer': event.organizer.get('email') if event.organizer else '',
+            'status': event.status,
+            'html_link': event.html_link
+        }
+        formatted_events.append(formatted_event)
+    
+    return {
+        'success': True,
+        'events': formatted_events
+    }
 
-def set_meeting() -> dict:
-    pass
-
-
+def set_meeting(summary: str, description: str = None, start_time: str = None, end_time: str = None, attendees: list = None, location: str = None) -> dict:
+    """
+    Create a new calendar meeting/event.
+    
+    Args:
+        summary (str): Meeting title/summary
+        description (str): Meeting description
+        start_time (str): Start time in ISO format (e.g., "2024-01-15T10:00:00")
+        end_time (str): End time in ISO format (e.g., "2024-01-15T11:00:00")
+        attendees (list): List of attendee email addresses
+        location (str): Meeting location
+        
+    Returns:
+        dict: Dictionary containing:
+            success (bool): Whether the operation succeeded
+            event_id (str): ID of the created event
+            error (str): Error message if unsuccessful
+    """
+    calendar_client = GoogleCalendarClient()
+    
+    # Parse datetime strings
+    from datetime import datetime
+    start_dt = None
+    end_dt = None
+    
+    if start_time:
+        start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+    
+    if end_time:
+        end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+    
+    # Create the event
+    event = calendar_client.create_event(
+        summary=summary,
+        description=description,
+        start_time=start_dt,
+        end_time=end_dt,
+        attendees=attendees,
+        location=location
+    )
+    
+    if event:
+        return {
+            'success': True,
+            'event_id': event.get('id'),
+            'event_link': event.get('htmlLink'),
+            'message': f'Meeting "{summary}" created successfully'
+        }
+    else:
+        return {
+            'success': False,
+            'error': 'Failed to create meeting'
+        }
 
 def get_user_profile() -> dict:
     """ Use this tool to get the user's profile from their gmail.
     """
-TOOLS = [get_unread_emails, create_drafts_for_unread_emails, send_drafts, edit_existing_draft]
+TOOLS = [get_unread_emails, create_drafts_for_unread_emails, send_drafts, edit_existing_draft, get_calendar_events]

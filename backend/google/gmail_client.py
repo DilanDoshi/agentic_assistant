@@ -2,42 +2,29 @@
 Gmail API client for the Agentic Assistant.
 
 This module provides a comprehensive interface to the Gmail API, handling
-authentication, email retrieval, parsing, and draft creation. It encapsulates
-all Gmail-related operations needed by the AI assistant.
+email retrieval, parsing, and draft creation. It inherits from BaseGoogleClient
+for authentication and shared functionality.
 """
 
-import os.path
-import json
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 from datetime import datetime
 import base64
 from email.mime.text import MIMEText
 import re
 
+from backend.google.base_client import BaseGoogleClient
 from backend.google.emails import Email
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# Gmail API scopes required for the application
-# If modifying these scopes, delete the file token.json to force re-authentication
-SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",    # Read emails and metadata
-    "https://www.googleapis.com/auth/gmail.send",        # Send emails
-    "https://www.googleapis.com/auth/gmail.compose",     # Create and modify drafts
-    "https://www.googleapis.com/auth/gmail.modify"       # Modify emails (labels, etc.)
-]
+# Import unified scopes from base client
+from backend.google.base_client import UNIFIED_SCOPES
 
-class GmailClient:
+class GmailClient(BaseGoogleClient):
     """
     Gmail API client for handling email operations.
     
-    This class provides methods for authenticating with Gmail, retrieving emails,
-    parsing email content, and creating drafts. It handles all the complexity
-    of working with the Gmail API and provides a clean interface for the rest
-    of the application.
+    This class provides methods for retrieving emails, parsing email content,
+    and creating drafts. It inherits authentication from BaseGoogleClient.
     """
     
     def __init__(self, credentials_path: str = "credentials.json", token_path: str = "token.json"):
@@ -48,78 +35,23 @@ class GmailClient:
             credentials_path (str): Path to the Google Cloud credentials file
             token_path (str): Path to store/load the OAuth token
         """
-        self.credentials_path = credentials_path
-        self.token_path = token_path
-        self.service = None  # Gmail API service instance
-        self.authenticate()  # Automatically authenticate on initialization
+        super().__init__(credentials_path, token_path, UNIFIED_SCOPES)
+        self.service = None  # Will be built when authenticate() is called
+        self.authenticate()
         
     def authenticate(self) -> bool:
         """
-        Authenticate the user to the Gmail API and return True if successful.
-        
-        This method handles the OAuth2 flow for Gmail API access. It first tries
-        to load existing credentials from the token file, and if that fails or
-        the token is expired, it initiates a new authentication flow.
+        Authenticate and build the Gmail service.
         
         Returns:
             bool: True if authentication was successful, False otherwise
         """
-        creds = None
-        
-        # Check if token file exists and load credentials
-        if os.path.exists(self.token_path):
-            try:
-                creds = Credentials.from_authorized_user_file(self.token_path, SCOPES)
-            except Exception as e:
-                print(f"Error loading existing token: {e}")
-                # Remove invalid token file
-                os.remove(self.token_path)
-                creds = None
-        
-        # If no valid credentials available, authenticate
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                try:
-                    creds.refresh(Request())
-                except Exception as e:
-                    print(f"Error refreshing token: {e}")
-                    creds = None
-            
-            if not creds:
-                if not os.path.exists(self.credentials_path):
-                    raise FileNotFoundError(
-                        f"Credentials file '{self.credentials_path}' not found. "
-                        "Please download it from Google Cloud Console."
-                    )
-                
-                try:
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        self.credentials_path, SCOPES
-                    )
-                    creds = flow.run_local_server(port=0)
-                except Exception as e:
-                    print(f"Error during authentication: {e}")
-                    return False
-                
-                # Save the credentials for the next run
-                try:
-                    with open(self.token_path, "w") as token:
-                        token.write(creds.to_json())
-                except Exception as e:
-                    print(f"Error saving token: {e}")
-        
-        try:
+        # Call parent authentication
+        if super().authenticate():
             # Build the Gmail service
-            self.service = build("gmail", "v1", credentials=creds)
-            
+            self.service = self.build_service("gmail", "v1")
             return True
-            
-        except HttpError as error:
-            print(f"Gmail API error: {error}")
-            return False
-        except Exception as error:
-            print(f"Unexpected error: {error}")
-            return False
+        return False
     
     def get_labels(self) -> List[Dict[str, Any]]:
         """Get all Gmail labels"""
@@ -202,6 +134,7 @@ class GmailClient:
         except Exception as error:
             print(f"Unexpected error fetching email with ID {msg_id}: {error}")
             return []
+            
     def mark_as_read(self, msg_id: str) -> bool:
         """Mark an email as read"""
         if not self.service:
@@ -214,7 +147,7 @@ class GmailClient:
                 body={"removeLabelIds": ["UNREAD"]}
                 ).execute()
             
-            print(f"Email {msg_id} marked as read")
+            # print(f"Email {msg_id} marked as read")
             
             return True
         except HttpError as error:
@@ -557,8 +490,8 @@ class GmailClient:
         except Exception:
             return ""
 
-def authenticate_gmail() -> Optional[GmailClient]:
-    
+
+def authenticate_gmail() -> GmailClient:
     """Legacy function for backward compatibility"""
     client = GmailClient()
     if client.authenticate():
