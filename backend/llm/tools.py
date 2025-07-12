@@ -54,14 +54,16 @@ def get_unread_emails(count: int) -> dict:
     
     return email_dict
 
-def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
+def create_drafts_for_unread_emails(email_info_dict: dict[str, str]) -> dict:
     """ 
     This tool will create drafts to respond to the unread emails. Use this tool when you need to create drafts to the user's unread emails.
     This tool will also decide which emails require a response and which emails do not.
     Only use this tool if the user has unread emails.
 
+    Use the value in the parameter email_info_dict to include information about the draft that needs to be created for the respective email_id. Use this value to indicate that a meeting is being created, to pass important user information, etc.
+
     Args:
-        email_ids(list(str)): A list of google message email ids. Use the get_unread_emails tool to get the google message email ids.
+        email_info_dict(dict[str, str]): A dictionary where keys are google message email ids and values are strings containing important information that is required for the drat creating agent. Use the get_unread_emails tool to get the google message email ids.
     Returns:
         A dictionary of email ids and their drafts.
     """
@@ -69,6 +71,9 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
     emails_dict = {}
     drafts = []
     email_objs = {}
+
+    # Extract email IDs from the dictionary keys
+    email_ids = list(email_info_dict.keys())
 
     for email_id in email_ids:
         email_obj = g_client.fetch_email_by_msg_id(email_id)[0]
@@ -86,7 +91,7 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
             'received_date': email_obj.received_date,
             'body_text': email_obj.body_text,
             'draft': '',
-            'draft_specications': ''
+            'draft_specications': email_info_dict[email_id]
         }
     
     emails_for_llm = str(emails_dict)
@@ -101,7 +106,6 @@ def create_drafts_for_unread_emails(email_ids: list[str]) -> dict:
 
     # The response is an AIMessage object, not a dictionary
     msg_id_from_llm = response.content
-
 
     # Convert response to python list 
     email_ids_from_llm = ast.literal_eval(msg_id_from_llm)
